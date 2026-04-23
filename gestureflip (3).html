@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GestureFlip — Touchless PDF Viewer</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#070c18;--surface:#0f1623;--surface2:#171f30;--surface3:#1e2840;
+  --accent:#00e5c0;--accent2:#3d7fff;--text:#dde4f0;--muted:#5a6882;
+  --border:rgba(255,255,255,0.07);
+}
+body{background:var(--bg);color:var(--text);font-family:'Space Grotesk',sans-serif;height:100vh;overflow:hidden;display:flex;flex-direction:column}
+header{display:flex;align-items:center;gap:16px;padding:0 24px;height:56px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;position:relative}
+header::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(0,229,192,.3),transparent)}
+.logo{font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:500;letter-spacing:-.5px}
+.logo .g{color:var(--accent)}.logo .f{color:var(--text)}
+.tagline{font-size:12px;color:var(--muted);letter-spacing:.5px}
+.header-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.btn{background:transparent;border:1px solid var(--border);color:var(--text);padding:7px 14px;border-radius:8px;font-family:'Space Grotesk',sans-serif;font-size:13px;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:7px}
+.btn:hover{background:var(--surface2);border-color:rgba(255,255,255,.15)}
+.btn.accent{background:var(--accent);color:#02100d;border-color:var(--accent);font-weight:600}
+.btn.accent:hover{background:#00ffcf}
+.btn svg{width:14px;height:14px;flex-shrink:0}
+.main{display:flex;flex:1;overflow:hidden}
+.sidebar{width:270px;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;flex-shrink:0}
+.sb-block{padding:16px;border-bottom:1px solid var(--border)}
+.sb-label{font-size:10px;font-weight:500;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:12px}
+.cam-wrap{position:relative;border-radius:10px;overflow:hidden;background:#000;aspect-ratio:4/3;border:1px solid var(--border)}
+#video{display:none}
+#camCanvas{width:100%;height:100%;display:block}
+.cam-badge{position:absolute;top:8px;left:8px;display:flex;align-items:center;gap:5px;background:rgba(0,0,0,.7);padding:4px 9px;border-radius:20px;font-size:11px;font-family:'JetBrains Mono',monospace;backdrop-filter:blur(4px)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--muted);transition:all .3s}
+.dot.live{background:#00d084;box-shadow:0 0 6px #00d084}
+.g-list{display:flex;flex-direction:column;gap:7px}
+.g-card{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:9px;border:1px solid var(--border);background:var(--surface2);transition:all .15s}
+.g-card.fire{border-color:var(--accent);background:rgba(0,229,192,.07);color:var(--accent)}
+.g-icon{width:34px;height:34px;border-radius:7px;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.g-name{font-size:12px;font-weight:500;margin-bottom:2px}
+.g-act{font-size:11px;color:var(--muted)}
+.g-card.fire .g-act{color:rgba(0,229,192,.7)}
+.stat-row{display:flex;align-items:baseline;gap:6px;margin-bottom:6px}
+.stat-num{font-size:28px;font-weight:500;color:var(--accent);font-family:'JetBrains Mono',monospace;line-height:1}
+.stat-sep{font-size:14px;color:var(--muted)}
+.stat-tot{font-size:14px;color:var(--muted)}
+.rot-pill{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-family:'JetBrains Mono',monospace;color:var(--accent2);background:rgba(61,127,255,.1);border:1px solid rgba(61,127,255,.25);padding:4px 12px;border-radius:20px}
+.drop-zone{margin:14px;border:1.5px dashed rgba(255,255,255,.1);border-radius:12px;padding:22px 12px;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;transition:all .2s;text-align:center}
+.drop-zone:hover{border-color:var(--accent);background:rgba(0,229,192,.04)}
+.dz-icon{font-size:24px;margin-bottom:2px}.dz-txt{font-size:12px;font-weight:500}.dz-sub{font-size:11px;color:var(--muted)}
+#fileInput{display:none}
+.pdf-area{flex:1;display:flex;align-items:center;justify-content:center;padding:28px 28px 72px;overflow:auto;background:var(--bg);position:relative}
+#pdfCanvas{max-width:100%;max-height:calc(100vh - 160px);border-radius:3px;box-shadow:0 0 0 1px rgba(255,255,255,.06),0 30px 80px rgba(0,0,0,.6);display:none}
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;pointer-events:none;user-select:none}
+.empty-hand{font-size:56px;margin-bottom:8px;opacity:.2}
+.empty-title{font-size:19px;font-weight:500;color:var(--text)}
+.empty-sub{font-size:14px;color:var(--muted);max-width:280px;line-height:1.6}
+
+/* ── PAGE NAVIGATOR ── */
+.page-nav{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);display:none;align-items:center;gap:4px;background:var(--surface);border:1px solid rgba(255,255,255,.13);border-radius:40px;padding:5px 7px;box-shadow:0 8px 32px rgba(0,0,0,.6);z-index:100;font-family:'JetBrains Mono',monospace}
+.page-nav.visible{display:flex}
+.nav-btn{background:transparent;border:none;color:var(--muted);font-size:15px;cursor:pointer;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
+.nav-btn:hover{background:var(--surface2);color:var(--accent)}
+.nav-display{display:flex;align-items:center;gap:5px;padding:3px 14px;cursor:pointer;border-radius:20px;transition:background .15s;min-width:94px;justify-content:center}
+.nav-display:hover{background:var(--surface2)}
+#navCurr{font-size:15px;font-weight:500;color:var(--accent)}
+.nav-sep{font-size:12px;color:var(--muted);margin:0 2px}
+#navTotal{font-size:12px;color:var(--muted)}
+.nav-edit-hint{font-size:10px;color:var(--muted);margin-left:2px;opacity:0;transition:opacity .15s}
+.nav-display:hover .nav-edit-hint{opacity:1}
+#navInput{display:none;width:78px;height:30px;background:var(--surface2);border:1.5px solid var(--accent);border-radius:20px;color:var(--accent);font-family:'JetBrains Mono',monospace;font-size:14px;text-align:center;padding:0 10px;outline:none}
+#navInput.show{display:block}
+
+/* progress bar */
+.progress-bar{position:absolute;bottom:0;left:0;height:2px;background:var(--accent);transition:width .3s;opacity:.5}
+
+/* thumbs ring */
+.thumbs-ring{position:absolute;top:8px;right:8px;width:32px;height:32px;opacity:0;transition:opacity .2s}
+.thumbs-ring.show{opacity:1}
+.thumbs-ring svg{transform:rotate(-90deg)}
+.thumbs-ring circle{fill:none;stroke:var(--accent);stroke-width:3;stroke-linecap:round;transition:stroke-dashoffset .05s linear}
+
+/* flash */
+#flash{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(.9);background:rgba(7,12,24,.88);border:1.5px solid var(--accent);border-radius:18px;padding:16px 34px;font-size:22px;font-weight:500;color:var(--accent);pointer-events:none;opacity:0;transition:opacity .2s,transform .2s;backdrop-filter:blur(12px);z-index:999;white-space:nowrap}
+#flash.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><span class="g">Gesture</span><span class="f">Flip</span></div>
+  <div class="tagline">Touchless PDF Viewer</div>
+  <div class="header-right">
+    <button class="btn" id="voiceBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10a7 7 0 0 1-14 0"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+      <span class="btn-label">Start Voice</span>
+    </button>
+    <button class="btn accent" onclick="document.getElementById('fileInput').click()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Load PDF
+    </button>
+    <input type="file" id="fileInput" accept=".pdf">
+  </div>
+</header>
+
+<div class="main">
+  <aside class="sidebar">
+    <div class="sb-block">
+      <div class="sb-label">Voice Control</div>
+      <div class="cam-wrap">
+        <canvas id="camCanvas" width="320" height="240"></canvas>
+        <div class="cam-badge">
+          <div class="dot" id="voiceDot"></div>
+          <span id="voiceStatus">Idle</span>
+        </div>
+        <div class="thumbs-ring" id="thumbsRing" style="display:none">
+          <svg width="32" height="32" viewBox="0 0 32 32">
+            <circle cx="16" cy="16" r="12" stroke-dasharray="75.4" stroke-dashoffset="75.4" id="thumbsArc"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <div class="sb-block">
+      <div class="sb-label">Voice Commands</div>
+      <div class="g-list">
+        <div class="g-card" id="gR">
+          <div class="g-icon">🎙️</div>
+          <div><div class="g-name">Next page</div><div class="g-act">Say “next”, “next page”, or “forward”</div></div>
+        </div>
+        <div class="g-card" id="gL">
+          <div class="g-icon">🎧</div>
+          <div><div class="g-name">Previous page</div><div class="g-act">Say “previous”, “back”, or “prev”</div></div>
+        </div>
+        <div class="g-card" id="gT">
+          <div class="g-icon">🔄</div>
+          <div><div class="g-name">Rotate page</div><div class="g-act">Say “rotate”, “turn”, or “spin”</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sb-block">
+      <div class="sb-label">Document Info</div>
+      <div class="stat-row">
+        <div class="stat-num" id="pgNum">&#8212;</div>
+        <div class="stat-sep">/</div>
+        <div class="stat-tot" id="pgTot">&#8212;</div>
+      </div>
+      <div class="rot-pill">&#10227; <span id="rotVal">0</span> deg</div>
+    </div>
+
+    <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+      <div class="dz-icon">&#128196;</div>
+      <div class="dz-txt">Drop PDF here</div>
+      <div class="dz-sub">or click to browse</div>
+    </div>
+  </aside>
+
+  <main class="pdf-area" id="pdfArea">
+    <div class="empty" id="emptyState">
+      <div class="empty-hand">&#9995;</div>
+      <div class="empty-title">Load a PDF to begin</div>
+      <div class="empty-sub">Upload a PDF, start voice control, and say next, previous, or rotate to navigate.</div>
+    </div>
+    <canvas id="pdfCanvas"></canvas>
+    <div class="progress-bar" id="progress" style="width:0%"></div>
+
+    <!-- PAGE NAVIGATOR -->
+    <div class="page-nav" id="pageNav">
+      <button class="nav-btn" id="navPrev" title="Previous page">&#8592;</button>
+      <div class="nav-display" id="navDisplay" onclick="startEdit()" title="Click to jump to any page">
+        <span id="navCurr">&#8212;</span>
+        <span class="nav-sep">/</span>
+        <span id="navTotal">&#8212;</span>
+        <span class="nav-edit-hint">&#9998;</span>
+      </div>
+      <input id="navInput" type="number" min="1" placeholder="pg"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();commitPage();}if(event.key==='Escape')cancelEdit();"
+        onblur="setTimeout(commitPage,100)">
+      <button class="nav-btn" id="navNext" title="Next page">&#8594;</button>
+    </div>
+  </main>
+</div>
+
+<div id="flash"></div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ── State ──────────────────────────────────────────────────────────
+let pdf = null, page = 1, rot = 0;
+const pdfCanvas = document.getElementById('pdfCanvas');
+const ctx2d = pdfCanvas.getContext('2d');
+
+// ── PDF rendering ──────────────────────────────────────────────────
+async function renderPage(n) {
+  if (!pdf) return;
+  const pg = await pdf.getPage(n);
+  const vp = pg.getViewport({ scale: 1.6, rotation: rot });
+  pdfCanvas.width = vp.width;
+  pdfCanvas.height = vp.height;
+  await pg.render({ canvasContext: ctx2d, viewport: vp }).promise;
+  // update sidebar
+  document.getElementById('pgNum').textContent = n;
+  document.getElementById('pgTot').textContent = pdf.numPages;
+  document.getElementById('rotVal').textContent = rot;
+  // update navigator
+  document.getElementById('navCurr').textContent = n;
+  document.getElementById('navTotal').textContent = pdf.numPages;
+  document.getElementById('pageNav').classList.add('visible');
+  // update progress bar
+  const pct = ((n - 1) / Math.max(pdf.numPages - 1, 1)) * 100;
+  document.getElementById('progress').style.width = pct + '%';
+}
+
+async function loadPDF(buf) {
+  pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  page = 1;
+  document.getElementById('emptyState').style.display = 'none';
+  pdfCanvas.style.display = 'block';
+  document.getElementById('navInput').max = pdf.numPages;
+  renderPage(page);
+}
+
+function nextPage() {
+  if (!pdf || page >= pdf.numPages) return false;
+  page++; renderPage(page); return true;
+}
+
+function prevPage() {
+  if (!pdf || page <= 1) return false;
+  page--; renderPage(page); return true;
+}
+
+function rotate() {
+  rot = (rot + 90) % 360;
+  renderPage(page);
+}
+
+// ── File loading ───────────────────────────────────────────────────
+document.getElementById('fileInput').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = ev => loadPDF(ev.target.result);
+  r.readAsArrayBuffer(f);
+});
+['dragover','dragleave','drop'].forEach(evt => {
+  document.addEventListener(evt, e => {
+    e.preventDefault();
+    if (evt === 'drop') {
+      const f = e.dataTransfer.files[0];
+      if (f?.type === 'application/pdf') {
+        const r = new FileReader();
+        r.onload = ev => loadPDF(ev.target.result);
+        r.readAsArrayBuffer(f);
+      }
+    }
+  });
+});
+
+// ── Page Navigator controls ────────────────────────────────────────
+function startEdit() {
+  if (!pdf) return;
+  const inp = document.getElementById('navInput');
+  const disp = document.getElementById('navDisplay');
+  inp.value = page;
+  inp.max = pdf.numPages;
+  inp.classList.add('show');
+  disp.style.display = 'none';
+  inp.focus();
+  inp.select();
+}
+
+let commitCalled = false;
+function commitPage() {
+  const inp = document.getElementById('navInput');
+  if (!inp.classList.contains('show')) return;
+  if (commitCalled) return;
+  commitCalled = true;
+  const val = parseInt(inp.value);
+  if (!isNaN(val) && val >= 1 && val <= pdf.numPages) {
+    page = val;
+    renderPage(page);
+  }
+  cancelEdit();
+  setTimeout(() => commitCalled = false, 200);
+}
+
+function cancelEdit() {
+  const inp = document.getElementById('navInput');
+  const disp = document.getElementById('navDisplay');
+  inp.classList.remove('show');
+  disp.style.display = '';
+}
+
+document.getElementById('navPrev').addEventListener('click', () => prevPage());
+document.getElementById('navNext').addEventListener('click', () => nextPage());
+
+// ── Voice control ─────────────────────────────────────────────────
+const camCanvas = document.getElementById('camCanvas');
+const cc = camCanvas.getContext('2d');
+const voiceBtn = document.getElementById('voiceBtn');
+const voiceDot = document.getElementById('voiceDot');
+const voiceStatus = document.getElementById('voiceStatus');
+
+let recognition = null;
+let voiceActive = false;
+
+function flashMsg(msg, col) {
+  col = col || '#00e5c0';
+  const el = document.getElementById('flash');
+  el.textContent = msg;
+  el.style.borderColor = col;
+  el.style.color = col;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 800);
+}
+
+function setVoiceStatus(text, enabled = false) {
+  voiceStatus.textContent = text;
+  voiceDot.classList.toggle('live', enabled);
+  voiceDot.style.background = enabled ? '#00d084' : 'var(--muted)';
+}
+
+function parseVoiceCommand(text) {
+  const command = text.trim().toLowerCase();
+  if (/^(go to page|page)\s*(\d+)/i.test(command)) {
+    const match = command.match(/(\d+)/);
+    return { action: 'goto', value: parseInt(match?.[1], 10) };
+  }
+  if (/\b(previous|prev|back|go back)\b/.test(command)) return { action: 'prev' };
+  if (/\b(rotate|turn|spin)\b/.test(command)) return { action: 'rotate' };
+  if (/\b(next|forward|continue)\b/.test(command)) return { action: 'next' };
+  return { action: 'unknown' };
+}
+
+function getFinalTranscript(event) {
+  let transcript = '';
+  for (let i = event.resultIndex; i < event.results.length; i++) {
+    if (event.results[i].isFinal) {
+      transcript += event.results[i][0].transcript + ' ';
+    }
+  }
+  return transcript.trim();
+}
+
+function handleVoiceResult(event) {
+  const transcript = getFinalTranscript(event);
+
+  if (!transcript) return;
+  const command = parseVoiceCommand(transcript);
+  if (command.action === 'next') {
+    if (nextPage()) {
+      flashMsg('Next page');
+      document.getElementById('gR').classList.add('fire');
+      setTimeout(() => document.getElementById('gR').classList.remove('fire'), 700);
+    }
+  } else if (command.action === 'prev') {
+    if (prevPage()) {
+      flashMsg('Previous page');
+      document.getElementById('gL').classList.add('fire');
+      setTimeout(() => document.getElementById('gL').classList.remove('fire'), 700);
+    }
+  } else if (command.action === 'rotate') {
+    rotate();
+    flashMsg('Rotate page', '#3d7fff');
+    document.getElementById('gT').classList.add('fire');
+    setTimeout(() => document.getElementById('gT').classList.remove('fire'), 700);
+  } else if (command.action === 'goto' && command.value) {
+    if (pdf && command.value >= 1 && command.value <= pdf.numPages) {
+      page = command.value;
+      renderPage(page);
+      flashMsg('Go to page ' + page);
+    } else {
+      flashMsg('Page not found', '#ff6b6b');
+    }
+  } else {
+    flashMsg('Say next, previous, rotate, or page number', '#ff9f43');
+  }
+}
+
+function createSpeechRecognition() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) return null;
+
+  const recog = new SpeechRecognition();
+  recog.continuous = true;
+  recog.interimResults = false;
+  recog.lang = 'en-US';
+
+  recog.onstart = () => setVoiceStatus('Listening', true);
+  recog.onresult = handleVoiceResult;
+  recog.onerror = event => {
+    if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+      setVoiceStatus('Microphone blocked', false);
+      flashMsg('Allow microphone access', '#ff6b6b');
+      stopVoiceRecognition();
+    }
+  };
+  recog.onend = () => {
+    if (voiceActive) {
+      try {
+        recog.start();
+      } catch (e) {
+        voiceActive = false;
+        voiceBtn.querySelector('.btn-label').textContent = 'Start Voice';
+        setVoiceStatus('Stopped', false);
+      }
+    } else {
+      setVoiceStatus('Idle', false);
+    }
+  };
+
+  return recog;
+}
+
+function startVoiceRecognition() {
+  if (voiceActive) return;
+  if (!recognition) recognition = createSpeechRecognition();
+  if (!recognition) {
+    setVoiceStatus('Not supported', false);
+    flashMsg('Speech recognition not supported', '#ff6b6b');
+    return;
+  }
+
+  try {
+    recognition.start();
+    voiceActive = true;
+    voiceBtn.querySelector('.btn-label').textContent = 'Voice Active';
+  } catch (err) {
+    setVoiceStatus('Error', false);
+    flashMsg('Failed to start voice control', '#ff6b6b');
+  }
+}
+
+function stopVoiceRecognition() {
+  if (!voiceActive || !recognition) return;
+  voiceActive = false;
+  recognition.stop();
+  voiceBtn.querySelector('.btn-label').textContent = 'Start Voice';
+}
+
+voiceBtn.addEventListener('click', () => {
+  if (voiceActive) {
+    stopVoiceRecognition();
+  } else {
+    startVoiceRecognition();
+  }
+});
+
+setVoiceStatus('Idle', false);
+
+// ── Page Navigator controls ────────────────────────────────────────
+
+</script>
+</body>
+</html>
